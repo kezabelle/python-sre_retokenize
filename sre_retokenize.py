@@ -5,10 +5,13 @@ import sre_compile
 from collections import namedtuple
 from typing import List, Union, Text, Type, Optional
 
-pat = r'^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$'
+pat = r'^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$'
 
 pat = r'^option[^a-zA-Z].*LOL.+test.{1,4}[a-f0-9]{2,4} - (?P<arg1>\d+) (\d+)$'
-pat = r'^.* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$'
+pat = r'^test .* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$'
+pat = r'^(?P<arg1>\d){1,4}(?:(?P<arg2>\d))(?P<arg3>\d)$'
+print('*'*32)
+# pat = r'^[^@]+@[^@]+\.[^@]+$'
 print(pat)
 
 
@@ -32,7 +35,7 @@ class Token:
         return instance
 
     def __str__(self):
-        pass
+        return '...'
 
     def __repr__(self):
         value = str(self)
@@ -45,11 +48,14 @@ class Token:
         end = start + advance_by
         return Position(start=start, by=advance_by, end=end)
 
-    def pretty(self):
-        pass
+    def describe(self):
+        return repr(self)
 
     def simplify(self):
-        pass
+        return '...'
+
+    def generate(self):
+        return 'generate'
 
 
 class Literal(Token):
@@ -67,20 +73,33 @@ class Literal(Token):
     def __len__(self):
         return self.value
 
-    pretty = __str__
+    def describe(self):
+        return f'character {self.value!r}'
+
     simplify = __str__
+    generate = __str__
 
 class Beginning(Literal):
     def __new__(cls, position):
         return super().__new__(cls, '^', position)
 
+    def describe(self):
+        return f'anchor to beginning'
+
+
 class End(Literal):
     def __new__(cls, position):
         return super().__new__(cls, '$', position)
 
+    def describe(self):
+        return f'anchor to end'
+
 class Anything(Literal):
     def __new__(cls, position):
         return super().__new__(cls, '.', position)
+
+    def describe(self):
+        return 'anything'
 
 
 class NegatedLiteral(Literal):
@@ -92,19 +111,32 @@ class NegatedLiteral(Literal):
     def __str__(self):
         return f'^{self.value}'
 
+    def describe(self):
+        return f'anything other than {self.value!r}'
+
 
 class Range(Token):
     __slots__ = ('start', 'end')
     def __new__(cls, start, end, position):
         instance = super().__new__(cls, position)
-        instance.start = chr(start)
-        instance.end = chr(end)
+        instance.start = start
+        instance.end = end
         return instance
 
     def __str__(self):
-        return f'{self.start}-{self.end}'
+        start = chr(self.start)
+        end = chr(self.end)
+        return f'{start}-{end}'
 
-    pretty = __str__
+    def describe(self):
+        if (self.end - self.start) > 10:
+            first = chr(self.start)
+            last = chr(self.end)
+            chars = ", ".join(chr(i) for i in range(self.start + 1 , self.start + 6, 1))
+            return f'any of {first!r}, ... {chars!s}, ... {last!r}'
+        chars = "', '".join(chr(i) for i in range(self.start, self.end, 1))
+        return f"any of '{chars!s}'"
+
     simplify = __str__
 
 
@@ -129,6 +161,19 @@ class Repeat(Token):
             elif self.min == 1:
                 minmax = '+'
         return f'{value}{minmax}'
+
+    def describe(self):
+        value = self.value.describe()
+        if value == '.':
+            value = 'anything'
+        if self.max == sre_constants.MAXREPEAT:
+            if self.min == 0:
+                template = '{value} (optional, any number of times)'
+            else:
+                template = '{value} ({min} or more times)'
+        else:
+            template = '{value} (between {min} and {max} times)'
+        return template.format(value=value, min=self.min, max=self.max)
 
     # def __repr__(self):
     #     self.
@@ -157,6 +202,12 @@ class In(Token):
         value = "".join(str(sub) for sub in self.value)
         return f'[{value!s}]'
 
+    def describe(self):
+        parts = []
+        for part in self.value:
+            parts.append(part.describe())
+        return " or ".join(parts)
+
 class NegatedIn(In):
     def __str__(self):
         value = "".join(str(sub) for sub in self.value)
@@ -176,6 +227,12 @@ class SubPattern(Token):
         if self.name:
             return f'(?P<{self.name!s}>{self.value!s})'
         return f'({self.value!s})'
+
+    def describe(self):
+        if self.name:
+            return f'group (named {self.name!r}) capturing: {self.value!s}'
+        else:
+            return f'group (number {self.number!s}) capturing {self.value!s}'
 
 # Literal = namedtuple("Literal", ("value", "position"))
 # NegatedLiteral = namedtuple("NegatedLiteral", ("value", "position"))
@@ -229,13 +286,13 @@ class Reparser:
         handled_nodes = []
         handled_positions = []
         handled_reprs = []
-        pprint(self.pattern)
+        for d in self.pattern.data:
+            pprint(d)
         final_nodes = self._continue_parsing(self.pattern, handled_nodes, handled_positions, handled_reprs)
-        print('final nodes')
-        pprint(final_nodes)
-        print('individual seen nodes')
-        pprint(handled_nodes)
+        print(final_nodes)
         print("".join(str(node) for node in final_nodes))
+        print("\n".join(node.describe() for node in final_nodes))
+        print("".join(node.generate() for node in final_nodes))
 
         return
 
@@ -449,8 +506,9 @@ class Reparser:
             Position(advance_from, advance_by, advance_to),
             bit,
         )
-    def _not_literal(self, op, av):
-        bit = chr(av)
+    def _not_literal(self, op, av, *a, **kw):
+        return NegatedLiteral(chr(av), self.current_position.end)
+        # bit =
         bit_length = len(bit)
         # [^] + character length
         advance_from = self.start_position
