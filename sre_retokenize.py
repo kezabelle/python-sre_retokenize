@@ -5,12 +5,12 @@ import sre_compile
 from collections import namedtuple
 from typing import List, Union, Text, Type, Optional
 
-pat = r'^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$'
+pat = r"^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$"
 
-pat = r'^option[^a-zA-Z].*LOL.+test.{1,4}[a-f0-9]{2,4} - (?P<arg1>\d+) (\d+)$'
-pat = r'^test .* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$'
-pat = r'^(?P<arg1>\d){1,4}(?:(?P<arg2>\d))(?P<arg3>\d)$'
-print('*'*32)
+pat = r"^option[^a-zA-Z].*LOL.+test.{1,4}[a-f0-9]{2,4} - (?P<arg1>\d+) (\d+)$"
+pat = r"^test .* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$"
+pat = r"^(?P<arg1>\d){1,4}(?:(?P<arg2>\d))(?P<arg3>\d)$"
+print("*" * 32)
 # pat = r'^[^@]+@[^@]+\.[^@]+$'
 print(pat)
 
@@ -23,11 +23,11 @@ for k, v in tree.state.groupdict.items():
     groupdict[v] = k
 
 
-Position = namedtuple('Position', ('start', 'by', 'end'))
+Position = namedtuple("Position", ("start", "by", "end"))
 
 
 class Token:
-    __slots__ = ('start_position',)
+    __slots__ = ("start_position",)
 
     def __new__(cls, position):
         instance = super().__new__(cls)
@@ -35,11 +35,11 @@ class Token:
         return instance
 
     def __str__(self):
-        return '...'
+        return "..."
 
     def __repr__(self):
         value = str(self)
-        return f'<{self.__class__.__name__!s} {value!r}>'
+        return f"<{self.__class__.__name__!s} {value!r}>"
 
     @property
     def position(self):
@@ -52,14 +52,14 @@ class Token:
         return repr(self)
 
     def simplify(self):
-        return '...'
+        return "..."
 
     def generate(self):
-        return 'generate'
+        return "generate"
 
 
 class Literal(Token):
-    __slots__ = ('value', 'sre_type', 'start_position')
+    __slots__ = ("value", "sre_type", "start_position")
 
     def __new__(cls, value, position):
         instance = super().__new__(cls, position)
@@ -74,49 +74,53 @@ class Literal(Token):
         return self.value
 
     def describe(self):
-        return f'character {self.value!r}'
+        return f"character {self.value!r}"
 
     simplify = __str__
     generate = __str__
 
+
 class Beginning(Literal):
     def __new__(cls, position):
-        return super().__new__(cls, '^', position)
+        return super().__new__(cls, "^", position)
 
     def describe(self):
-        return f'anchor to beginning'
+        return f"anchor to beginning"
 
 
 class End(Literal):
     def __new__(cls, position):
-        return super().__new__(cls, '$', position)
+        return super().__new__(cls, "$", position)
 
     def describe(self):
-        return f'anchor to end'
+        return f"anchor to end"
+
 
 class Anything(Literal):
     def __new__(cls, position):
-        return super().__new__(cls, '.', position)
+        return super().__new__(cls, ".", position)
 
     def describe(self):
-        return 'anything'
+        return "anything"
 
 
 class NegatedLiteral(Literal):
     __slots__ = ()
+
     def __new__(cls, value, position):
         instance = super().__new__(cls, value, position)
         return instance
 
     def __str__(self):
-        return f'^{self.value}'
+        return f"^{self.value}"
 
     def describe(self):
-        return f'anything other than {self.value!r}'
+        return f"anything other than {self.value!r}"
 
 
 class Range(Token):
-    __slots__ = ('start', 'end')
+    __slots__ = ("start", "end")
+
     def __new__(cls, start, end, position):
         instance = super().__new__(cls, position)
         instance.start = start
@@ -126,14 +130,14 @@ class Range(Token):
     def __str__(self):
         start = chr(self.start)
         end = chr(self.end)
-        return f'{start}-{end}'
+        return f"{start}-{end}"
 
     def describe(self):
         if (self.end - self.start) > 10:
             first = chr(self.start)
             last = chr(self.end)
-            chars = ", ".join(chr(i) for i in range(self.start + 1 , self.start + 6, 1))
-            return f'any of {first!r}, ... {chars!s}, ... {last!r}'
+            chars = ", ".join(chr(i) for i in range(self.start + 1, self.start + 6, 1))
+            return f"any of {first!r}, ... {chars!s}, ... {last!r}"
         chars = "', '".join(chr(i) for i in range(self.start, self.end, 1))
         return f"any of '{chars!s}'"
 
@@ -141,7 +145,7 @@ class Range(Token):
 
 
 class Repeat(Token):
-    __slots__ = ('min', 'max', 'value')
+    __slots__ = ("min", "max", "value")
 
     def __new__(cls, min, max, value, position):
         instance = super().__new__(cls, position)
@@ -152,27 +156,27 @@ class Repeat(Token):
 
     def __str__(self):
         value = str(self.value)
-        minmax = f'{{{self.min},{self.max}}}'
+        minmax = f"{{{self.min},{self.max}}}"
         if self.min == self.max:
-            minmax = f'{self.min}'
+            minmax = f"{{{self.min}}}"
         if self.max == sre_constants.MAXREPEAT:
             if self.min == 0:
-                minmax = '*'
+                minmax = "*"
             elif self.min == 1:
-                minmax = '+'
-        return f'{value}{minmax}'
+                minmax = "+"
+        return f"{value}{minmax}"
 
     def describe(self):
         value = self.value.describe()
-        if value == '.':
-            value = 'anything'
+        if value == ".":
+            value = "anything"
         if self.max == sre_constants.MAXREPEAT:
             if self.min == 0:
-                template = '{value} (optional, any number of times)'
+                template = "{value} (optional, any number of times)"
             else:
-                template = '{value} ({min} or more times)'
+                template = "{value} ({min} or more times)"
         else:
-            template = '{value} (between {min} and {max} times)'
+            template = "{value} (between {min} and {max} times)"
         return template.format(value=value, min=self.min, max=self.max)
 
     # def __repr__(self):
@@ -181,7 +185,7 @@ class Repeat(Token):
 
 
 class Category(Token):
-    __slots__ = ('value',)
+    __slots__ = ("value",)
 
     def __new__(cls, value, position):
         instance = super().__new__(cls, position)
@@ -189,10 +193,12 @@ class Category(Token):
         return value
 
     def __str__(self):
-        return 'test'
+        return "test"
+
 
 class In(Token):
-    __slots__ = ('value',)
+    __slots__ = ("value",)
+
     def __new__(cls, value, position):
         instance = super().__new__(cls, position)
         instance.value = value
@@ -200,7 +206,7 @@ class In(Token):
 
     def __str__(self):
         value = "".join(str(sub) for sub in self.value)
-        return f'[{value!s}]'
+        return f"[{value!s}]"
 
     def describe(self):
         parts = []
@@ -208,14 +214,16 @@ class In(Token):
             parts.append(part.describe())
         return " or ".join(parts)
 
+
 class NegatedIn(In):
     def __str__(self):
         value = "".join(str(sub) for sub in self.value)
-        return f'[^{value!s}]'
+        return f"[^{value!s}]"
 
 
 class SubPattern(Token):
     __slots__ = ("name", "number", "value")
+
     def __new__(cls, name, num, value, position):
         instance = super().__new__(cls, position)
         instance.name = name
@@ -225,14 +233,15 @@ class SubPattern(Token):
 
     def __str__(self):
         if self.name:
-            return f'(?P<{self.name!s}>{self.value!s})'
-        return f'({self.value!s})'
+            return f"(?P<{self.name!s}>{self.value!s})"
+        return f"({self.value!s})"
 
     def describe(self):
         if self.name:
-            return f'group (named {self.name!r}) capturing: {self.value!s}'
+            return f"group (named {self.name!r}) capturing: {self.value!s}"
         else:
-            return f'group (number {self.number!s}) capturing {self.value!s}'
+            return f"group (number {self.number!s}) capturing {self.value!s}"
+
 
 # Literal = namedtuple("Literal", ("value", "position"))
 # NegatedLiteral = namedtuple("NegatedLiteral", ("value", "position"))
@@ -247,9 +256,14 @@ NegatedRange = namedtuple("Range", ("start", "end", "position"))
 # MaxRepeat = namedtuple("MaxRepeat", ("start", "end", "value", "position"))
 
 
-
 class Reparser:
-    __slots__ = ("pattern", "named_groups_by_name", "named_groups_by_number", "positions", "seen_tokens")
+    __slots__ = (
+        "pattern",
+        "named_groups_by_name",
+        "named_groups_by_number",
+        "positions",
+        "seen_tokens",
+    )
 
     pattern: sre_parse.SubPattern
     seen_tokens: List[Token]
@@ -261,8 +275,12 @@ class Reparser:
             self.pattern = sre_parse.parse(pattern)
         elif isinstance(pattern, re.Pattern):
             self.pattern = sre_parse.parse(pattern.pattern, flags=pattern.flags)
-        self.named_groups_by_name = {k: v for k,v in self.pattern.state.groupdict.items()}
-        self.named_groups_by_number = {v: k for k,v in self.pattern.state.groupdict.items()}
+        self.named_groups_by_name = {
+            k: v for k, v in self.pattern.state.groupdict.items()
+        }
+        self.named_groups_by_number = {
+            v: k for k, v in self.pattern.state.groupdict.items()
+        }
         self.positions = [0]
         self.seen_tokens = []
 
@@ -279,35 +297,42 @@ class Reparser:
             return Position(start=0, by=0, end=0)
         return last.position
 
-
-
     def parse(self):
         from pprint import pprint
+
         handled_nodes = []
         handled_positions = []
         handled_reprs = []
         for d in self.pattern.data:
             pprint(d)
-        final_nodes = self._continue_parsing(self.pattern, handled_nodes, handled_positions, handled_reprs)
+        final_nodes = self._continue_parsing(
+            self.pattern, handled_nodes, handled_positions, handled_reprs
+        )
         print(final_nodes)
         print("".join(str(node) for node in final_nodes))
         print("\n".join(node.describe() for node in final_nodes))
         print("".join(node.generate() for node in final_nodes))
 
-        return
+        return final_nodes
 
     def _parse_subcomponent(self):
         pass
 
-    def _continue_parsing(self, nodes, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _continue_parsing(
+        self, nodes, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         final_nodes = []
         for node in nodes:
-            result = self._parse_node(node, handled_nodes, handled_positions, handled_reprs)
+            result = self._parse_node(
+                node, handled_nodes, handled_positions, handled_reprs
+            )
             final_nodes.append(result)
             self.seen_tokens.append(result)
         return final_nodes
 
-    def _parse_node(self, node, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _parse_node(
+        self, node, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         op, av = node
         # print(node)
         if op is sre_constants.AT:
@@ -318,36 +343,52 @@ class Reparser:
             handled_reprs.append(repr)
             self.positions.append(positions.end)
         elif op is sre_constants.NOT_LITERAL:
-            return self._not_literal(op, av, handled_nodes, handled_positions, handled_reprs)
+            return self._not_literal(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
             parsed_node, positions, repr = self._not_literal(op, av)
             handled_nodes.append(parsed_node)
             handled_positions.append(positions)
             handled_reprs.append(repr)
             self.positions.append(positions.end)
         elif op is sre_constants.LITERAL:
-            return self._literal(op, av, handled_nodes, handled_positions, handled_reprs)
+            return self._literal(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
             parsed_node, positions, repr = self._literal(op, av)
             handled_nodes.append(parsed_node)
             handled_positions.append(positions)
             handled_reprs.append(repr)
             self.positions.append(positions.end)
         elif op is sre_constants.MIN_REPEAT:
-            return self._min_repeat(op, av, handled_nodes, handled_positions, handled_reprs)
-            parsed_node, positions, repr = self._min_repeat(op, av, handled_nodes, handled_positions, handled_reprs)
+            return self._min_repeat(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
+            parsed_node, positions, repr = self._min_repeat(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
             handled_nodes.append(parsed_node)
             handled_positions.append(positions)
             handled_reprs.append(repr)
             # self.positions.append(positions.end)
         elif op is sre_constants.MAX_REPEAT:
-            return self._max_repeat(op, av, handled_nodes, handled_positions, handled_reprs)
-            parsed_node, positions, repr = self._max_repeat(op, av, handled_nodes, handled_positions, handled_reprs)
+            return self._max_repeat(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
+            parsed_node, positions, repr = self._max_repeat(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
             handled_nodes.append(parsed_node)
             handled_positions.append(positions)
             handled_reprs.append(repr)
             # self.positions.append(positions.end)
         elif op is sre_constants.SUBPATTERN:
-            return self._subpattern(op, av, handled_nodes, handled_positions, handled_reprs)
-            parsed_node, positions, repr = self._subpattern(op, av, handled_nodes, handled_positions, handled_reprs)
+            return self._subpattern(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
+            parsed_node, positions, repr = self._subpattern(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
             handled_nodes.append(parsed_node)
             handled_positions.append(positions)
             handled_reprs.append(repr)
@@ -358,10 +399,11 @@ class Reparser:
         elif op is sre_constants.RANGE:
             return self._range(op, av, handled_nodes, handled_positions, handled_reprs)
         elif op is sre_constants.CATEGORY:
-            return self._category(op, av, handled_nodes, handled_positions, handled_reprs)
+            return self._category(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
         else:
-            raise ValueError(f'unexpected {op}: {av}')
-
+            raise ValueError(f"unexpected {op}: {av}")
 
     # handle promotion of literals into literalgroups
 
@@ -373,14 +415,16 @@ class Reparser:
 
     def _category(self, op, av, *args, **kwargs):
         if av is sre_constants.CATEGORY_DIGIT:
-            return Category('\d', self.current_position.end)
-        raise ValueError(f'unexpected {op}: {av}')
+            return Category("\d", self.current_position.end)
+        raise ValueError(f"unexpected {op}: {av}")
 
     def _any(self, op, av, *args, **kwargs):
         return Anything(self.current_position.end)
         return (None, None, None)
 
-    def _range(self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _range(
+        self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         first, last = av
         span = Range(first, last, self.current_position.end)
         return span
@@ -398,7 +442,9 @@ class Reparser:
         #         positions.append(end_position)
         return (None, None, None)
 
-    def _in(self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _in(
+        self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         negated: bool = av[0][0] is sre_constants.NEGATE
         cls: Union[Type[In], Type[NegatedIn]] = In
         if negated:
@@ -407,7 +453,9 @@ class Reparser:
         # multiple_ops = len({subop for subop, subav in av}) > 1
         # if not multiple_ops:
         #
-        some_stuff = self._continue_parsing(av, handled_nodes, handled_positions, handled_reprs)
+        some_stuff = self._continue_parsing(
+            av, handled_nodes, handled_positions, handled_reprs
+        )
         return cls(some_stuff, self.current_position.end)
         handled_nodes.append(node)
         return (None, None, None)
@@ -450,26 +498,40 @@ class Reparser:
         #         else:
         #             segments.append(Range(first, last, (start_position, end_position)))
 
-    def _subpattern(self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _subpattern(
+        self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         group_number, x, y, subpattern = av
-        group_name = self.named_groups_by_number.get(group_number, '')
-        some_stuff = self._continue_parsing(subpattern, handled_nodes, handled_positions, handled_reprs)
+        group_name = self.named_groups_by_number.get(group_number, "")
+        some_stuff = self._continue_parsing(
+            subpattern, handled_nodes, handled_positions, handled_reprs
+        )
         if len(some_stuff) == 1:
             some_stuff = some_stuff.pop()
-        return SubPattern(group_name, group_number, some_stuff, self.current_position.end)
+        return SubPattern(
+            group_name, group_number, some_stuff, self.current_position.end
+        )
         return (None, None, None)
 
-    def _min_repeat(self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _min_repeat(
+        self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         min_num, max_num, subpattern = av
-        some_stuff = self._continue_parsing(subpattern, handled_nodes, handled_positions, handled_reprs)
+        some_stuff = self._continue_parsing(
+            subpattern, handled_nodes, handled_positions, handled_reprs
+        )
         if len(some_stuff) == 1:
             some_stuff = some_stuff.pop(0)
         Repeat(int(min_num), int(max_num), some_stuff, 1)
         return (None, None, None)
 
-    def _max_repeat(self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List):
+    def _max_repeat(
+        self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
+    ):
         min_num, max_num, subpattern = av
-        some_stuff = self._continue_parsing(subpattern, handled_nodes, handled_positions, handled_reprs)
+        some_stuff = self._continue_parsing(
+            subpattern, handled_nodes, handled_positions, handled_reprs
+        )
         if len(some_stuff) == 1:
             some_stuff = some_stuff.pop(0)
         return Repeat(int(min_num), int(max_num), some_stuff, 1)
@@ -481,16 +543,16 @@ class Reparser:
         elif av is sre_constants.AT_END:
             return self._at_end(op, av)
         else:
-            raise ValueError(f'unexpected {op}: {av}')
+            raise ValueError(f"unexpected {op}: {av}")
 
     def _at_beginning(self, op, av, **kwargs):
         return Beginning(self.current_position.end)
         advance_from = self.start_position
         advance_by = 1
         advance_to = advance_from + advance_by
-        bit = '^'
+        bit = "^"
         return (
-            Beginning('^', advance_from),
+            Beginning("^", advance_from),
             Position(advance_from, advance_by, advance_to),
             bit,
         )
@@ -500,12 +562,13 @@ class Reparser:
         advance_from = self.start_position
         advance_by = 1
         advance_to = advance_from + advance_by
-        bit = '$'
+        bit = "$"
         return (
-            End('$', advance_from),
+            End("$", advance_from),
             Position(advance_from, advance_by, advance_to),
             bit,
         )
+
     def _not_literal(self, op, av, *a, **kw):
         return NegatedLiteral(chr(av), self.current_position.end)
         # bit =
@@ -517,7 +580,7 @@ class Reparser:
         return (
             NegatedLiteral(bit, advance_from),
             Position(advance_from, advance_by, advance_to),
-            f'[^{bit}]',
+            f"[^{bit}]",
         )
 
     def _literal(self, op, av, *args, **kwargs):
@@ -532,6 +595,8 @@ class Reparser:
             Position(advance_from, advance_by, advance_to),
             bit,
         )
+
+
 #
 #
 # def _dump(parsed_tree: sre_parse.SubPattern, groups: dict):
@@ -627,10 +692,84 @@ class Reparser:
 # dumpee = Reparser(tree)
 # dumpee.parse()
 
+
 def parse(pattern):
     parser = Reparser(pattern)
     results = parser.parse()
     return results
 
+
 parse(pat)
+
+
+if __name__ == "__main__":
+    import unittest
+    import sys
+
+    class CountingTestResult(unittest.TextTestResult):
+        def addSubTest(self, test, subtest, outcome):
+            # handle failures calling base class
+            super().addSubTest(test, subtest, outcome)
+            # add to total number of tests run
+            self.testsRun += 1
+
+    class Tests(unittest.TestCase):
+        InOut = namedtuple("InOut", ("raw", "expected"))
+        parameters = (
+            # empty/blank
+            InOut(r"^$", "^$"),
+            # literal runs
+            InOut(r"^testing$", "^testing$"),
+            # multiple spaces (specifically only space!)
+            InOut(r" +", " +"),
+            # simple range; vowels
+            InOut(r'[aeiou]', '[aeiou]'),
+            # hex ranges
+            InOut(r"[\x20-\x7E]", " +"),
+            # unicode ranges
+            InOut(r"[\u03A0-\u03FF]", " +"),
+            # quacks like an email
+            InOut(r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$"),
+            # non-ascii alphanumeric
+            InOut(r"^[^a-zA-Z0-9]$", "^[^a-zA-Z0-9]$"),
+            # positive integers
+            InOut(r"^[1-9]+[0-9]*$", "^[1-9]+[0-9]*$"),
+            # positive decimals
+            InOut(r"(^\d*\.?\d*[0-9]+\d*$)|(^[0-9]+\d*\.\d*$)", "^[^a-zA-Z0-9]$"),
+            # positive or negative decimals with `,` as a separator
+            InOut(r"-?\d+(,\d*)?", "^[^a-zA-Z0-9]$"),
+            # ISO-2 country code(ish); 84094 or 84094-1234
+            InOut(r"[A-Z][A-Z]", "[A-Z][A-Z]"),
+            # zip code(ish?)
+            InOut(r"[0-9]\{5\}(-[0-9]\{4\})?", "^[^a-zA-Z0-9]$"),
+            # social security; ###-##-####
+            InOut(r"[0-9]\{3\}-[0-9]\{2\}-[0-9]\{4\}", "[0-9]{3}-[0-9]{2}-[0-9]{4}"),
+            # uuid
+            InOut(
+                r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
+                "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
+            ),
+            # dates; yyyy/mm/dd
+            InOut(r'^\d{4}/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])$',
+                  ''),
+            # ipv4
+            InOut('^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$',
+                  '')
+        )
+
+        def test_parsing(self):
+            for raw, expected in self.parameters:
+                with self.subTest(msg=raw):
+                    re.compile(raw)
+                    output = "".join(str(o) for o in parse(raw))
+                    self.assertEqual(output, expected)
+                    # self.assertSequenceEqual(output, expected)
+
+    unittest.main(
+        module=sys.modules[__name__],
+        # testRunner=unittest.TextTestRunner(resultclass=CountingTestResult),
+        verbosity=2,
+        catchbreak=True,
+        tb_locals=True,
+    )
 
