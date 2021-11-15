@@ -10,9 +10,9 @@ pat = r"^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+
 pat = r"^option[^a-zA-Z].*LOL.+test.{1,4}[a-f0-9]{2,4} - (?P<arg1>\d+) (\d+)$"
 pat = r"^test .* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$"
 pat = r"^(?P<arg1>\d){1,4}(?:(?P<arg2>\d))(?P<arg3>\d)$"
-print("*" * 32)
+# print("*" * 32)
 # pat = r'^[^@]+@[^@]+\.[^@]+$'
-print(pat)
+# print(pat)
 
 
 tree = sre_parse.parse(pat)
@@ -39,7 +39,7 @@ class Token:
 
     def __repr__(self):
         value = str(self)
-        return f"<{self.__class__.__name__!s} {value!r}>"
+        return f"<{self.__class__.__name__!s} {value!r} ({self.position!s})>"
 
     @property
     def position(self):
@@ -68,6 +68,8 @@ class Literal(Token):
         return instance
 
     def __str__(self):
+        if self.value in sre_parse.SPECIAL_CHARS:
+            return f"\\{self.value}"
         return self.value
 
     def __len__(self):
@@ -80,25 +82,49 @@ class Literal(Token):
     generate = __str__
 
 
-class Beginning(Literal):
+class Beginning(Token):
+    __slots__ = ("value", "sre_type", "start_position")
+
     def __new__(cls, position):
-        return super().__new__(cls, "^", position)
+        instance = super().__new__(cls, position)
+        instance.value = '^'
+        instance.sre_type = sre_constants.AT_BEGINNING
+        return instance
+
+    def __str__(self):
+        return self.value
 
     def describe(self):
         return f"anchor to beginning"
 
 
-class End(Literal):
+class End(Token):
+    __slots__ = ("value", "sre_type", "start_position")
+
     def __new__(cls, position):
-        return super().__new__(cls, "$", position)
+        instance = super().__new__(cls, position)
+        instance.value = '$'
+        instance.sre_type = sre_constants.AT_END
+        return instance
+
+    def __str__(self):
+        return self.value
 
     def describe(self):
         return f"anchor to end"
 
 
-class Anything(Literal):
+class Anything(Token):
+    __slots__ = ("value", "sre_type", "start_position")
+
     def __new__(cls, position):
-        return super().__new__(cls, ".", position)
+        instance = super().__new__(cls, position)
+        instance.value = '.'
+        instance.sre_type = sre_constants.ANY
+        return instance
+
+    def __str__(self):
+        return self.value
 
     def describe(self):
         return "anything"
@@ -112,7 +138,7 @@ class NegatedLiteral(Literal):
         return instance
 
     def __str__(self):
-        return f"^{self.value}"
+        return f"[^{self.value}]"
 
     def describe(self):
         return f"anything other than {self.value!r}"
@@ -155,21 +181,25 @@ class Repeat(Token):
         return instance
 
     def __str__(self):
-        value = str(self.value)
+        value = "".join(str(v) for v in self.value)
         minmax = f"{{{self.min},{self.max}}}"
         if self.min == self.max:
             minmax = f"{{{self.min}}}"
-        if self.max == sre_constants.MAXREPEAT:
+        # Actually using MAXREPEAT as a number, in {0,4294967295} results in an
+        # OverflowError, so consider the one lower than it as maximum, too
+        if self.max in (int(sre_constants.MAXREPEAT), int(sre_constants.MAXREPEAT)-1):
             if self.min == 0:
                 minmax = "*"
             elif self.min == 1:
                 minmax = "+"
+            else:
+                minmax = f"{{{self.min},}}"
         return f"{value}{minmax}"
 
     def describe(self):
-        value = self.value.describe()
-        if value == ".":
-            value = "anything"
+        values = " ".join(v.describe() for v in self.value)
+        if values == ".":
+            values = "anything"
         if self.max == sre_constants.MAXREPEAT:
             if self.min == 0:
                 template = "{value} (optional, any number of times)"
@@ -177,7 +207,7 @@ class Repeat(Token):
                 template = "{value} ({min} or more times)"
         else:
             template = "{value} (between {min} and {max} times)"
-        return template.format(value=value, min=self.min, max=self.max)
+        return template.format(value=values, min=self.min, max=self.max)
 
     # def __repr__(self):
     #     self.
@@ -284,6 +314,9 @@ class Reparser:
         self.positions = [0]
         self.seen_tokens = []
 
+    def __repr__(self):
+        return f'<{self.__class__.__name__} pattern: {self.pattern.data!r}>'
+
     @property
     def last_token(self) -> Optional[Token]:
         if not self.seen_tokens:
@@ -303,15 +336,15 @@ class Reparser:
         handled_nodes = []
         handled_positions = []
         handled_reprs = []
-        for d in self.pattern.data:
-            pprint(d)
+        # for d in self.pattern.data:
+        #     pprint(d)
         final_nodes = self._continue_parsing(
             self.pattern, handled_nodes, handled_positions, handled_reprs
         )
-        print(final_nodes)
-        print("".join(str(node) for node in final_nodes))
-        print("\n".join(node.describe() for node in final_nodes))
-        print("".join(node.generate() for node in final_nodes))
+        # print(final_nodes)
+        # print("".join(str(node) for node in final_nodes))
+        # print("\n".join(node.describe() for node in final_nodes))
+        # print("".join(node.generate() for node in final_nodes))
 
         return final_nodes
 
@@ -520,8 +553,8 @@ class Reparser:
         some_stuff = self._continue_parsing(
             subpattern, handled_nodes, handled_positions, handled_reprs
         )
-        if len(some_stuff) == 1:
-            some_stuff = some_stuff.pop(0)
+        # if len(some_stuff) == 1:
+        #     some_stuff = some_stuff.pop(0)
         Repeat(int(min_num), int(max_num), some_stuff, 1)
         return (None, None, None)
 
@@ -532,8 +565,8 @@ class Reparser:
         some_stuff = self._continue_parsing(
             subpattern, handled_nodes, handled_positions, handled_reprs
         )
-        if len(some_stuff) == 1:
-            some_stuff = some_stuff.pop(0)
+        # if len(some_stuff) == 1:
+        #     some_stuff = some_stuff.pop(0)
         return Repeat(int(min_num), int(max_num), some_stuff, 1)
         return (None, None, None)
 
@@ -696,7 +729,7 @@ class Reparser:
 def parse(pattern):
     parser = Reparser(pattern)
     results = parser.parse()
-    return results
+    return results, parser
 
 
 parse(pat)
@@ -724,6 +757,8 @@ if __name__ == "__main__":
             InOut(r" +", " +"),
             # simple range; vowels
             InOut(r'[aeiou]', '[aeiou]'),
+            # collapsing ranges
+            InOut(r'[abcdefgh]', '[aeiou]'),
             # hex ranges
             InOut(r"[\x20-\x7E]", " +"),
             # unicode ranges
@@ -740,8 +775,6 @@ if __name__ == "__main__":
             InOut(r"-?\d+(,\d*)?", "^[^a-zA-Z0-9]$"),
             # ISO-2 country code(ish); 84094 or 84094-1234
             InOut(r"[A-Z][A-Z]", "[A-Z][A-Z]"),
-            # zip code(ish?)
-            InOut(r"[0-9]\{5\}(-[0-9]\{4\})?", "^[^a-zA-Z0-9]$"),
             # social security; ###-##-####
             InOut(r"[0-9]\{3\}-[0-9]\{2\}-[0-9]\{4\}", "[0-9]{3}-[0-9]{2}-[0-9]{4}"),
             # uuid
@@ -757,13 +790,57 @@ if __name__ == "__main__":
                   '')
         )
 
-        def test_parsing(self):
-            for raw, expected in self.parameters:
+        def _test_parsing(self):
+            for i, (raw, expected) in enumerate(self.parameters, start=0):
                 with self.subTest(msg=raw):
+                    # if raw == '[abcdefgh]':
+                    #     pass
                     re.compile(raw)
-                    output = "".join(str(o) for o in parse(raw))
+                    nodes = parse(raw)
+                    output = "".join(str(n) for n in nodes)
                     self.assertEqual(output, expected)
                     # self.assertSequenceEqual(output, expected)
+
+        def assertRawMatches(self, raw, expected):
+            try:
+                re.compile(raw)
+            except re.error:
+                self.fail(f"Invalid regex: {raw!r}")
+            nodes, parser = parse(raw)
+            output = "".join(str(n) for n in nodes)
+            self.assertEqual(output, expected)
+            print(raw, '==', expected)
+
+        def test_repeats(self):
+            raw, expected = "^a{3}$", "^a{3}$"
+            self.assertRawMatches(raw, expected)
+            raw, expected = "^a{3,}$", "^a{3,}$"
+            self.assertRawMatches(raw, expected)
+            raw, expected = "^a{3,10}$", "^a{3,10}$"
+            self.assertRawMatches(raw, expected)
+            raw, expected = "^a{0,10}$", "^a{0,10}$"
+            self.assertRawMatches(raw, expected)
+            maximum = int(sre_constants.MAXREPEAT)-1
+            raw, expected = f"^a{{0,{maximum}}}$", f"^a*$"
+            self.assertRawMatches(raw, expected)
+            raw, expected = f"^a{{1,{maximum}}}$", f"^a+$"
+            self.assertRawMatches(raw, expected)
+            raw, expected = "^[^@]$", "^[^@]$"
+            self.assertRawMatches(raw, expected)
+
+        def test_iso2_codes(self):
+            """ISO-2 country code(ish); GB, US etc"""
+            raw, expected = r"[A-Z][A-Z]", "[A-Z][A-Z]"
+            self.assertRawMatches(raw, expected)
+
+        def test_zipcodeish(self):
+            """zip code(ish?); 84094 or 84094-1234"""
+            raw, expected = r"[0-9]{5}(-[0-9]{4})?", "[0-9]{5}(-[0-9]{4})?"
+            self.assertRawMatches(raw, expected)
+
+        def test_emailish(self):
+            raw, expected = (r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$")
+            self.assertRawMatches(raw, expected)
 
     unittest.main(
         module=sys.modules[__name__],
@@ -771,5 +848,6 @@ if __name__ == "__main__":
         verbosity=2,
         catchbreak=True,
         tb_locals=True,
+        buffer=False,
     )
 
