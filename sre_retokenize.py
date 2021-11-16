@@ -1,8 +1,10 @@
+import random
 import re
 import sre_parse
 import sre_constants
 import sre_compile
 from collections import namedtuple
+from itertools import chain
 from typing import List, Union, Text, Type, Optional
 
 pat = r"^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$"
@@ -29,20 +31,22 @@ Position = namedtuple("Position", ("start", "by", "end"))
 class Token:
     __slots__ = ("start_position",)
 
-    def __new__(cls, position):
+    position: int
+
+    def __new__(cls, position: int):
         instance = super().__new__(cls)
         instance.start_position = position
         return instance
 
     def __str__(self):
-        return "..."
+        raise NotImplementedError(f"{self.__class__.__name__} doesn't implement __str__")
 
     def __repr__(self):
         value = str(self)
         return f"<{self.__class__.__name__!s} {value!r} ({self.position!s})>"
 
     @property
-    def position(self):
+    def position(self) -> Position:
         start = self.start_position
         advance_by = len(str(self))
         end = start + advance_by
@@ -52,16 +56,18 @@ class Token:
         return repr(self)
 
     def simplify(self):
-        return "..."
+        raise NotImplementedError(f"{self.__class__.__name__} doesn't implement simplify")
 
     def generate(self):
-        return "generate"
+        raise NotImplementedError(f"{self.__class__.__name__} doesn't implement generate")
 
 
 class Literal(Token):
     __slots__ = ("value", "sre_type", "start_position")
+    
+    value: int
 
-    def __new__(cls, value, position):
+    def __new__(cls, value: int, position: int):
         instance = super().__new__(cls, position)
         instance.value = value
         instance.sre_type = sre_constants.LITERAL
@@ -85,7 +91,9 @@ class Literal(Token):
 class Beginning(Token):
     __slots__ = ("value", "sre_type", "start_position")
 
-    def __new__(cls, position):
+    value: str
+
+    def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = '^'
         instance.sre_type = sre_constants.AT_BEGINNING
@@ -97,11 +105,16 @@ class Beginning(Token):
     def describe(self):
         return f"anchor to beginning"
 
+    def generate(self):
+        return ''
+
 
 class End(Token):
     __slots__ = ("value", "sre_type", "start_position")
 
-    def __new__(cls, position):
+    value: str
+
+    def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = '$'
         instance.sre_type = sre_constants.AT_END
@@ -113,11 +126,16 @@ class End(Token):
     def describe(self):
         return f"anchor to end"
 
+    def generate(self):
+        return ''
+
 
 class Anything(Token):
     __slots__ = ("value", "sre_type", "start_position")
 
-    def __new__(cls, position):
+    value: str
+
+    def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = '.'
         instance.sre_type = sre_constants.ANY
@@ -143,22 +161,30 @@ class NegatedLiteral(Literal):
     def describe(self):
         return f"anything other than {self.value!r}"
 
+    def generate(self):
+        bad = self.value
+        current = self.value
+        top_end = range(0x110000)[-1] # chr(1114112) causes an error giving us this.
+        while current == bad:
+            current = random.randint(33, top_end)
+        return chr(current)
+
 
 class Range(Token):
     __slots__ = ("start", "end")
 
-    def __new__(cls, start, end, position):
+    def __new__(cls, start: int, end: int, position: int):
         instance = super().__new__(cls, position)
         instance.start = start
         instance.end = end
         return instance
 
-    def __str__(self):
+    def __str__(self) -> str:
         start = chr(self.start)
         end = chr(self.end)
         return f"{start}-{end}"
 
-    def describe(self):
+    def describe(self) -> str:
         if (self.end - self.start) > 10:
             first = chr(self.start)
             last = chr(self.end)
@@ -167,13 +193,15 @@ class Range(Token):
         chars = "', '".join(chr(i) for i in range(self.start, self.end, 1))
         return f"any of '{chars!s}'"
 
-    simplify = __str__
+
+    def generate(self):
+        return chr(random.randint(self.start, self.end))
 
 
 class Repeat(Token):
     __slots__ = ("min", "max", "value")
 
-    def __new__(cls, min, max, value, position):
+    def __new__(cls, min: int, max: int, value, position: int):
         instance = super().__new__(cls, position)
         instance.min = min
         instance.max = max
@@ -209,6 +237,18 @@ class Repeat(Token):
             template = "{value} (between {min} and {max} times)"
         return template.format(value=values, min=self.min, max=self.max)
 
+    def generate(self):
+        minimum = self.min
+        maximum = min(10, self.max)
+        make = random.randint(minimum, maximum)
+        count = 0
+        parts = []
+        while count < make:
+            value = random.choice(self.value)
+            parts.append(value.generate())
+            count+=1
+        return parts
+
     # def __repr__(self):
     #     self.
     #     return f'<{self.__class__.__name__!s} {value!r}>'
@@ -223,13 +263,15 @@ class Category(Token):
         return value
 
     def __str__(self):
-        return "test"
+        return self.value
 
 
 class In(Token):
     __slots__ = ("value",)
 
-    def __new__(cls, value, position):
+    value: List[Token]
+
+    def __new__(cls, value: List[Token], position):
         instance = super().__new__(cls, position)
         instance.value = value
         return instance
@@ -244,6 +286,9 @@ class In(Token):
             parts.append(part.describe())
         return " or ".join(parts)
 
+    def generate(self):
+        values = [v.generate() for v in self.value]
+        return "".join(values)
 
 class NegatedIn(In):
     def __str__(self):
@@ -273,12 +318,38 @@ class SubPattern(Token):
             return f"group (number {self.number!s}) capturing {self.value!s}"
 
 
+class OrBranch(Token):
+    value: List[Token]
+
+    def __new__(cls, value: List[Token], position):
+        instance = super().__new__(cls, position)
+        instance.value = value
+        return instance
+
+    def __str__(self):
+        return "|".join(str(node) for node in self.value)
+
+
+class Empty(Token):
+    __slots__ = ("value", "sre_type", "start_position")
+
+    value: str
+
+    def __new__(cls, position: int):
+        instance = super().__new__(cls, position)
+        instance.value = ''
+        instance.sre_type = None
+        return instance
+
+    def __str__(self):
+        return self.value
+
 # Literal = namedtuple("Literal", ("value", "position"))
 # NegatedLiteral = namedtuple("NegatedLiteral", ("value", "position"))
-LiteralGroup = namedtuple("LiteralGroup", ("value", "start", "end"))
-Negated = namedtuple("Negated", ("value"))
+# LiteralGroup = namedtuple("LiteralGroup", ("value", "start", "end"))
+# Negated = namedtuple("Negated", ("value"))
 # Range = namedtuple("Range", ("start", "end", "position"))
-NegatedRange = namedtuple("Range", ("start", "end", "position"))
+# NegatedRange = namedtuple("Range", ("start", "end", "position"))
 # Beginning = namedtuple("Beginning", ('value', 'position'))
 # End = namedtuple("End", ('value', 'position'))
 # Repeat = namedtuple("Repeat", ("start", "end", "value", "position"))
@@ -333,6 +404,8 @@ class Reparser:
     def parse(self):
         from pprint import pprint
 
+        self._parse_noncapturing_groups()
+
         handled_nodes = []
         handled_positions = []
         handled_reprs = []
@@ -348,8 +421,71 @@ class Reparser:
 
         return final_nodes
 
-    def _parse_subcomponent(self):
-        pass
+    def _parse_noncapturing_groups(self):
+        # https://newbedev.com/is-it-possible-to-match-nested-brackets-with-a-regex-without-using-recursion-or-balancing-groups
+        # (?=\(\?:)(?=((?:(?=.*?\((?!.*?\2)(.*\)(?!.*\3).*))(?=.*?\)(?!.*?\3)(.*)).)+?.*?(?=\2)[^(]*(?=\3$))) ... :(
+        # results = tuple(self.matches('^(?:(?<p>test(?:(?P<test>\d))))$'))
+
+        toxt = r'^(?:(?P<p>test(?:(?P<test>\d))))$'
+        source = sre_parse.Tokenizer(toxt)
+
+        starts = reversed([m.start() for m in re.finditer(re.escape('(?:'), toxt)])
+
+        # source = sre_parse.Tokenizer(self.pattern.state.str)
+        sourceget = source.get
+        someshit = []
+        while True:
+            this = sourceget()
+            # if sourcematch('(') and sourcematch('?') and sourcematch(':'):
+            #     pass
+            if this is None:
+                break # end of pattern
+            if this == "(":
+                this = sourceget()
+                if this == "?":
+                    this = sourceget()
+                    if this == ":":
+                        stack = 0
+                        start = source.pos - 3
+                        while True:
+                            this = sourceget()
+                            # print(this)
+                            if this == "(":
+                                stack+=1
+                            if this == ")":
+                                stack-=1
+                            if stack == 0:
+                                end = source.pos+1
+                                someshit.append((start, end))
+                                break
+
+            # if this in "|)":
+            #     break  # end of subpattern
+            # sourceget()
+            # state = sre_parse.State()
+            # if this == "(":
+            #     start = source.tell() - 1
+            #     if sourcematch("?"):
+            #         char = sourceget()
+            #         if char == ":":
+            #             # while True:
+            #             #     if source.next is None:
+            #             #         raise source.error("missing ), unterminated comment",
+            #             #                            source.tell() - start)
+            #             #     if sourceget() == ")":
+            #             #         someshit.append(toxt[start:source.pos])
+            #             p = sre_parse._parse(source, state, 0, nested + 1, False)
+            #             contained = source.getuntil(')', name='non-capturing group')
+            #             someshit.append(contained)
+        return
+
+    def _parse_noncapturing_groups1(self):
+        toxt = r'^(?:(?P<p>test(?:(?P<test>\d))))$'
+        source = sre_parse.Tokenizer(toxt)
+
+        # source = sre_parse.Tokenizer(self.pattern.state.str)
+        sourceget = source.get
+        sourcematch = source.match
 
     def _continue_parsing(
         self, nodes, handled_nodes: List, handled_positions: List, handled_reprs: List
@@ -435,6 +571,10 @@ class Reparser:
             return self._category(
                 op, av, handled_nodes, handled_positions, handled_reprs
             )
+        elif op is sre_constants.BRANCH:
+            return self._branch(
+                op, av, handled_nodes, handled_positions, handled_reprs
+            )
         else:
             raise ValueError(f"unexpected {op}: {av}")
 
@@ -446,9 +586,32 @@ class Reparser:
     # pprint(handled_reprs)
     # pprint(self.positions)
 
+    def _branch(self, op, av, *args, **kwargs):
+        # dunno what the None represents
+        # if av[0] is None:
+        #     av = av[1:]
+        # # dunno, seems to be further wrapped
+        # av = av[0]
+        some_stuff = []
+
+        # I dunno
+        for i, a in enumerate(av[1]):
+            if isinstance(a, sre_parse.SubPattern) and a.data == []:
+                some_stuff.append(Empty(self.current_position.end))
+            for subop, subav in a:
+                print(subop, subav)
+                if subav == []:
+                    print('test')
+                some_stuff.append(self._continue_parsing(
+            a, *args, **kwargs
+        )[0])
+        return OrBranch(some_stuff, self.current_position.end)
+
     def _category(self, op, av, *args, **kwargs):
         if av is sre_constants.CATEGORY_DIGIT:
             return Category("\d", self.current_position.end)
+        elif av is sre_constants.CATEGORY_WORD:
+            return Category("\w", self.current_position.end)
         raise ValueError(f"unexpected {op}: {av}")
 
     def _any(self, op, av, *args, **kwargs):
@@ -739,6 +902,8 @@ if __name__ == "__main__":
     import unittest
     import sys
 
+    random.seed(42)
+
     class CountingTestResult(unittest.TextTestResult):
         def addSubTest(self, test, subtest, outcome):
             # handle failures calling base class
@@ -809,7 +974,6 @@ if __name__ == "__main__":
             nodes, parser = parse(raw)
             output = "".join(str(n) for n in nodes)
             self.assertEqual(output, expected)
-            print(raw, '==', expected)
 
         def test_repeats(self):
             raw, expected = "^a{3}$", "^a{3}$"
@@ -842,12 +1006,60 @@ if __name__ == "__main__":
             raw, expected = (r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$")
             self.assertRawMatches(raw, expected)
 
+        def test_optional(self):
+            raw, expected = r"(?P<product>\w+)/(?P<project_id>\w+|)", r"(?P<product>[\w]+)/(?P<project_id>[\w]+|)"
+            self.assertRawMatches(raw, expected)
+            raw, expected = r"(?P<product>\w+)/(?:(?P<project_id>\w+))?", "(?P<product>[\w]+)/(?P<project_id>[\w]+){0,1}"
+            self.assertRawMatches(raw, expected)
+
+    class GenerationTests(unittest.TestCase):
+        def assertGenerates(self, raw, expected):
+            try:
+                re.compile(raw)
+            except re.error:
+                self.fail(f"Invalid regex: {raw!r}")
+            nodes, parser = parse(raw)
+            output = "".join(chain.from_iterable([n.generate() for n in nodes]))
+            self.assertSequenceEqual(output, expected)
+
+
+        def test_iso2_codes(self):
+            """ISO-2 country code(ish); GB, US etc"""
+            raw = r"[A-Z][A-Z]"
+            expected = "UD"
+            self.assertGenerates(raw, expected)
+
+        def test_repeats(self):
+            raw = "^a{3}$"
+            expected = "aaa"
+            self.assertGenerates(raw, expected)
+            raw = "^a{3,}$"
+            expected = 'aaaaa'
+            self.assertGenerates(raw, expected)
+            raw = "^a{3,10}$"
+            expected = 'aaaa'
+            self.assertGenerates(raw, expected)
+            raw = "^a{0,10}$"
+            expected = 'aaaaaaaaaa'
+            self.assertGenerates(raw, expected)
+            maximum = int(sre_constants.MAXREPEAT) - 1
+            raw = f"^a{{0,{maximum}}}$"
+            expected = 'aaa'
+            self.assertGenerates(raw, expected)
+            raw = f"^a{{1,{maximum}}}$"
+            expected = 'aaaaaaa'
+            self.assertGenerates(raw, expected)
+            raw = f"^[^@]$"
+            expected = '\U000c1d15'
+            self.assertGenerates(raw, expected)
+
     unittest.main(
         module=sys.modules[__name__],
         # testRunner=unittest.TextTestRunner(resultclass=CountingTestResult),
         verbosity=2,
         catchbreak=True,
-        tb_locals=True,
+        tb_locals=False,
+        failfast=True,
         buffer=False,
     )
 
