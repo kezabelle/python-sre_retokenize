@@ -1058,7 +1058,7 @@ if __name__ == "__main__":
         # testRunner=unittest.TextTestRunner(resultclass=CountingTestResult),
         verbosity=2,
         catchbreak=True,
-        tb_locals=False,
+        tb_locals=True,
         failfast=True,
         buffer=False,
     )
