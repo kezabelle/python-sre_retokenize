@@ -7,22 +7,19 @@ from collections import namedtuple
 from itertools import chain
 from typing import List, Union, Text, Type, Optional
 
-pat = r"^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$"
-
-pat = r"^option[^a-zA-Z].*LOL.+test.{1,4}[a-f0-9]{2,4} - (?P<arg1>\d+) (\d+)$"
-pat = r"^test .* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$"
-pat = r"^(?P<arg1>\d){1,4}(?:(?P<arg2>\d))(?P<arg3>\d)$"
-# print("*" * 32)
-# pat = r'^[^@]+@[^@]+\.[^@]+$'
-# print(pat)
+# pat = r"^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$"
+#
+# pat = r"^option[^a-zA-Z].*LOL.+test.{1,4}[a-f0-9]{2,4} - (?P<arg1>\d+) (\d+)$"
+# pat = r"^test .* .+ .{1,4} [a-f0-9]{2,4} (?P<arg1>\d+) (\d+)$"
+# pat = r"^(?P<arg1>\d){1,4}(?:(?P<arg2>\d))(?P<arg3>\d)$"
 
 
-tree = sre_parse.parse(pat)
+# tree = sre_parse.parse(pat)
 # tree.dump()
-
-groupdict = {}
-for k, v in tree.state.groupdict.items():
-    groupdict[v] = k
+#
+# groupdict = {}
+# for k, v in tree.state.groupdict.items():
+#     groupdict[v] = k
 
 
 Position = namedtuple("Position", ("start", "by", "end"))
@@ -39,10 +36,13 @@ class Token:
         return instance
 
     def __str__(self):
-        raise NotImplementedError(f"{self.__class__.__name__} doesn't implement __str__")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} doesn't implement __str__"
+        )
 
     def __repr__(self):
         value = str(self)
+        return f"<{self.__class__.__name__!s} {value!r}>"
         return f"<{self.__class__.__name__!s} {value!r} ({self.position!s})>"
 
     @property
@@ -56,15 +56,19 @@ class Token:
         return repr(self)
 
     def simplify(self):
-        raise NotImplementedError(f"{self.__class__.__name__} doesn't implement simplify")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} doesn't implement simplify"
+        )
 
     def generate(self):
-        raise NotImplementedError(f"{self.__class__.__name__} doesn't implement generate")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} doesn't implement generate"
+        )
 
 
 class Literal(Token):
     __slots__ = ("value", "sre_type", "start_position")
-    
+
     value: int
 
     def __new__(cls, value: int, position: int):
@@ -95,7 +99,7 @@ class Beginning(Token):
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
-        instance.value = '^'
+        instance.value = "^"
         instance.sre_type = sre_constants.AT_BEGINNING
         return instance
 
@@ -106,7 +110,7 @@ class Beginning(Token):
         return f"anchor to beginning"
 
     def generate(self):
-        return ''
+        return ""
 
 
 class End(Token):
@@ -116,7 +120,7 @@ class End(Token):
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
-        instance.value = '$'
+        instance.value = "$"
         instance.sre_type = sre_constants.AT_END
         return instance
 
@@ -127,7 +131,7 @@ class End(Token):
         return f"anchor to end"
 
     def generate(self):
-        return ''
+        return ""
 
 
 class Anything(Token):
@@ -137,7 +141,7 @@ class Anything(Token):
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
-        instance.value = '.'
+        instance.value = "."
         instance.sre_type = sre_constants.ANY
         return instance
 
@@ -164,7 +168,7 @@ class NegatedLiteral(Literal):
     def generate(self):
         bad = self.value
         current = self.value
-        top_end = range(0x110000)[-1] # chr(1114112) causes an error giving us this.
+        top_end = range(0x110000)[-1]  # chr(1114112) causes an error giving us this.
         while current == bad:
             current = random.randint(33, top_end)
         return chr(current)
@@ -182,7 +186,7 @@ class Range(Token):
     def __str__(self) -> str:
         start = chr(self.start)
         end = chr(self.end)
-        return f"{start}-{end}"
+        return f"[{start}-{end}]"
 
     def describe(self) -> str:
         if (self.end - self.start) > 10:
@@ -192,7 +196,6 @@ class Range(Token):
             return f"any of {first!r}, ... {chars!s}, ... {last!r}"
         chars = "', '".join(chr(i) for i in range(self.start, self.end, 1))
         return f"any of '{chars!s}'"
-
 
     def generate(self):
         return chr(random.randint(self.start, self.end))
@@ -215,14 +218,19 @@ class Repeat(Token):
             minmax = f"{{{self.min}}}"
         # Actually using MAXREPEAT as a number, in {0,4294967295} results in an
         # OverflowError, so consider the one lower than it as maximum, too
-        if self.max in (int(sre_constants.MAXREPEAT), int(sre_constants.MAXREPEAT)-1):
+        if self.max in (int(sre_constants.MAXREPEAT), int(sre_constants.MAXREPEAT) - 1):
             if self.min == 0:
                 minmax = "*"
             elif self.min == 1:
                 minmax = "+"
             else:
                 minmax = f"{{{self.min},}}"
+        # elif self.max == 1 and self.min == 0:
+        #     minmax = '?'
         return f"{value}{minmax}"
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__!s} {self!s} {self.value!r}>"
 
     def describe(self):
         values = " ".join(v.describe() for v in self.value)
@@ -246,7 +254,7 @@ class Repeat(Token):
         while count < make:
             value = random.choice(self.value)
             parts.append(value.generate())
-            count+=1
+            count += 1
         return parts
 
     # def __repr__(self):
@@ -260,10 +268,22 @@ class Category(Token):
     def __new__(cls, value, position):
         instance = super().__new__(cls, position)
         instance.value = value
-        return value
+        return instance
 
     def __str__(self):
         return self.value
+
+
+class DigitCategory(Category):
+    def __new__(cls, position):
+        return super().__new__(cls, '\d', position)
+
+    def __str__(self):
+        return f'[0-9], from {self.value!s}'
+
+    def generate(self):
+        # TODO: handle \d unicode points
+        return random.randint(0, 9)
 
 
 class In(Token):
@@ -277,8 +297,14 @@ class In(Token):
         return instance
 
     def __str__(self):
+        all_literals = {type(sub) for sub in self.value} == {Literal}
         value = "".join(str(sub) for sub in self.value)
-        return f"[{value!s}]"
+        if all_literals:
+            return f'[{value!s}]'
+        return value
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__!s} {self.value!r}>"
 
     def describe(self):
         parts = []
@@ -287,8 +313,11 @@ class In(Token):
         return " or ".join(parts)
 
     def generate(self):
-        values = [v.generate() for v in self.value]
-        return "".join(values)
+        value = random.choice(self.value)
+        return value.generate()
+        # values = [v.generate() for v in self.value]
+        # return "".join(values)
+
 
 class NegatedIn(In):
     def __str__(self):
@@ -307,15 +336,28 @@ class SubPattern(Token):
         return instance
 
     def __str__(self):
+        # Hacky, value can be a single thing like Repeat, or a series of things
+        # like Literal, Repeat
+        if isinstance(self.value, list):
+            value = "".join(str(node) for node in self.value)
+        else:
+            value = str(self.value)
         if self.name:
-            return f"(?P<{self.name!s}>{self.value!s})"
-        return f"({self.value!s})"
+            return f"(?P<{self.name!s}>{value!s})"
+        return f"({value!s})"
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__!s} {self.value!r}>"
 
     def describe(self):
         if self.name:
             return f"group (named {self.name!r}) capturing: {self.value!s}"
         else:
             return f"group (number {self.number!s}) capturing {self.value!s}"
+
+    def generate(self):
+        bits = [node.generate() for node in self.value]
+        return "".join(bits)
 
 
 class OrBranch(Token):
@@ -327,7 +369,19 @@ class OrBranch(Token):
         return instance
 
     def __str__(self):
-        return "|".join(str(node) for node in self.value)
+        print(self.value)
+        branches = ["".join(str(node) for node in branch) for branch in self.value]
+        # for branch in self.value:
+        #     branches.append("".join(str(node) for node in branch))
+        return "|".join(str(node) for node in branches)
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__!s} {self.value!r}>"
+
+    def generate(self):
+        branch = random.choice(self.value)
+        bits = chain.from_iterable(bit.generate() for bit in branch)
+        return "".join(bits)
 
 
 class Empty(Token):
@@ -337,12 +391,13 @@ class Empty(Token):
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
-        instance.value = ''
+        instance.value = ""
         instance.sre_type = None
         return instance
 
     def __str__(self):
         return self.value
+
 
 # Literal = namedtuple("Literal", ("value", "position"))
 # NegatedLiteral = namedtuple("NegatedLiteral", ("value", "position"))
@@ -386,7 +441,16 @@ class Reparser:
         self.seen_tokens = []
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} pattern: {self.pattern.data!r}>'
+        names = set(self.named_groups_by_name.keys())
+        numbers = set(self.named_groups_by_number.keys())
+        return "".join(
+            (
+                f"<{self.__class__.__name__}",
+                f" group names: {names!r}" if names else "",
+                f" group numbers: {numbers!r}" if numbers else "",
+                f" pattern: {self.pattern.data!r}>",
+            )
+        )
 
     @property
     def last_token(self) -> Optional[Token]:
@@ -426,10 +490,10 @@ class Reparser:
         # (?=\(\?:)(?=((?:(?=.*?\((?!.*?\2)(.*\)(?!.*\3).*))(?=.*?\)(?!.*?\3)(.*)).)+?.*?(?=\2)[^(]*(?=\3$))) ... :(
         # results = tuple(self.matches('^(?:(?<p>test(?:(?P<test>\d))))$'))
 
-        toxt = r'^(?:(?P<p>test(?:(?P<test>\d))))$'
+        toxt = r"^(?:(?P<p>test(?:(?P<test>\d))))$"
         source = sre_parse.Tokenizer(toxt)
 
-        starts = reversed([m.start() for m in re.finditer(re.escape('(?:'), toxt)])
+        starts = reversed([m.start() for m in re.finditer(re.escape("(?:"), toxt)])
 
         # source = sre_parse.Tokenizer(self.pattern.state.str)
         sourceget = source.get
@@ -439,7 +503,7 @@ class Reparser:
             # if sourcematch('(') and sourcematch('?') and sourcematch(':'):
             #     pass
             if this is None:
-                break # end of pattern
+                break  # end of pattern
             if this == "(":
                 this = sourceget()
                 if this == "?":
@@ -451,11 +515,11 @@ class Reparser:
                             this = sourceget()
                             # print(this)
                             if this == "(":
-                                stack+=1
+                                stack += 1
                             if this == ")":
-                                stack-=1
+                                stack -= 1
                             if stack == 0:
-                                end = source.pos+1
+                                end = source.pos + 1
                                 someshit.append((start, end))
                                 break
 
@@ -480,7 +544,7 @@ class Reparser:
         return
 
     def _parse_noncapturing_groups1(self):
-        toxt = r'^(?:(?P<p>test(?:(?P<test>\d))))$'
+        toxt = r"^(?:(?P<p>test(?:(?P<test>\d))))$"
         source = sre_parse.Tokenizer(toxt)
 
         # source = sre_parse.Tokenizer(self.pattern.state.str)
@@ -571,45 +635,38 @@ class Reparser:
             return self._category(
                 op, av, handled_nodes, handled_positions, handled_reprs
             )
-        elif op is sre_constants.BRANCH:
-            return self._branch(
+        elif op is sre_constants.CATEGORY_DIGIT:
+            return self._category(
                 op, av, handled_nodes, handled_positions, handled_reprs
             )
+        elif op is sre_constants.BRANCH:
+            return self._branch(op, av, handled_nodes, handled_positions, handled_reprs)
         else:
             raise ValueError(f"unexpected {op}: {av}")
 
-    # handle promotion of literals into literalgroups
-
-    # from pprint import pprint
-    # pprint(handled_nodes)
-    # pprint(handled_positions)
-    # pprint(handled_reprs)
-    # pprint(self.positions)
-
     def _branch(self, op, av, *args, **kwargs):
         # dunno what the None represents
-        # if av[0] is None:
-        #     av = av[1:]
+        if av[0] is None:
+            av = av[1:]
         # # dunno, seems to be further wrapped
-        # av = av[0]
-        some_stuff = []
+        av = av[0]
+        branches = [
+            self._continue_parsing(branch, *args, **kwargs) for branch in av
+        ]
 
         # I dunno
-        for i, a in enumerate(av[1]):
-            if isinstance(a, sre_parse.SubPattern) and a.data == []:
-                some_stuff.append(Empty(self.current_position.end))
-            for subop, subav in a:
-                print(subop, subav)
-                if subav == []:
-                    print('test')
-                some_stuff.append(self._continue_parsing(
-            a, *args, **kwargs
-        )[0])
-        return OrBranch(some_stuff, self.current_position.end)
+        # for i, a in enumerate(av):
+        #     if isinstance(a, sre_parse.SubPattern) and a.data == []:
+        #         branches.append(Empty(self.current_position.end))
+        #     for subop, subav in a:
+        #         if subav == []:
+        #             pass
+        #         branches.append(self._continue_parsing(a, *args, **kwargs))
+        return OrBranch(branches, self.current_position.end)
 
     def _category(self, op, av, *args, **kwargs):
         if av is sre_constants.CATEGORY_DIGIT:
-            return Category("\d", self.current_position.end)
+            return DigitCategory(self.current_position.end)
         elif av is sre_constants.CATEGORY_WORD:
             return Category("\w", self.current_position.end)
         raise ValueError(f"unexpected {op}: {av}")
@@ -624,19 +681,6 @@ class Reparser:
         first, last = av
         span = Range(first, last, self.current_position.end)
         return span
-        handled_nodes.append(span)
-        #         start_position = positions[-1] + len(first)
-        #         chars.append(first)
-        #         positions.append(start_position)
-        #
-        #         position = positions[-1] + len(first)
-        #         chars.append('-')
-        #         positions.append(position)
-        #
-        #         end_position = positions[-1] + len(last)
-        #         chars.append(last)
-        #         positions.append(end_position)
-        return (None, None, None)
 
     def _in(
         self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
@@ -653,46 +697,6 @@ class Reparser:
             av, handled_nodes, handled_positions, handled_reprs
         )
         return cls(some_stuff, self.current_position.end)
-        handled_nodes.append(node)
-        return (None, None, None)
-        # chars.append('[')
-        # position = positions[-1] + 1
-        # positions.append(position)
-        #
-        # if negated:
-        #     av.pop(0)
-        #     chars.append('^')
-        #     position = positions[-1] + 1
-        #     positions.append(position)
-        # for i, j in av:
-        #     print(i, j)
-        #     if i is sre_constants.LITERAL:
-        #         byte = chr(j)
-        #         position = positions[-1] + len(byte)
-        #         chars.append(byte)
-        #         positions.append(position)
-        #         segments.append(Negated(Literal(byte, position)))
-        #     elif i is sre_constants.RANGE:
-        #         first = chr(j[0])
-        #         last = chr(j[1])
-        #
-        #         start_position = positions[-1] + len(first)
-        #         chars.append(first)
-        #         positions.append(start_position)
-        #
-        #         position = positions[-1] + len(first)
-        #         chars.append('-')
-        #         positions.append(position)
-        #
-        #         end_position = positions[-1] + len(last)
-        #         chars.append(last)
-        #         positions.append(end_position)
-        #
-        #         if negated:
-        #             segments.append(
-        #                 Negated(Range(first, last, (start_position, end_position))))
-        #         else:
-        #             segments.append(Range(first, last, (start_position, end_position)))
 
     def _subpattern(
         self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
@@ -702,12 +706,11 @@ class Reparser:
         some_stuff = self._continue_parsing(
             subpattern, handled_nodes, handled_positions, handled_reprs
         )
-        if len(some_stuff) == 1:
-            some_stuff = some_stuff.pop()
+        # if len(some_stuff) == 1:
+        #     some_stuff = some_stuff.pop()
         return SubPattern(
             group_name, group_number, some_stuff, self.current_position.end
         )
-        return (None, None, None)
 
     def _min_repeat(
         self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
@@ -731,7 +734,6 @@ class Reparser:
         # if len(some_stuff) == 1:
         #     some_stuff = some_stuff.pop(0)
         return Repeat(int(min_num), int(max_num), some_stuff, 1)
-        return (None, None, None)
 
     def _at(self, op, av, *args, **kwargs):
         if av is sre_constants.AT_BEGINNING:
@@ -793,116 +795,18 @@ class Reparser:
         )
 
 
-#
-#
-# def _dump(parsed_tree: sre_parse.SubPattern, groups: dict):
-#     dumper = Reparser()
-#     positions = [0]
-#     chars = []
-#     treebits = []
-#     segments = []
-#     for node in parsed_tree:
-#         op, av = node
-#         if op is sre_constants.LITERAL:
-#             byte = chr(av)
-#             position = positions[-1] + len(byte)
-#             chars.append(byte)
-#             positions.append(position)
-#             segments.append(Literal(byte, position))
-#         elif op is sre_constants.NOT_LITERAL:
-#             dumper.not_literal(op, av)
-#             chars.append('^')
-#             position = positions[-1] + 1
-#             positions.append(position)
-#
-#             byte = chr(av)
-#             position = positions[-1] + len(byte)
-#             chars.append(byte)
-#             positions.append(position)
-#             segments.append(Negated(Literal(byte, position)))
-#         elif op is sre_constants.IN:
-#             negated = av[0][0] is sre_constants.NEGATE
-#             chars.append('[')
-#             position = positions[-1] + 1
-#             positions.append(position)
-#
-#             if negated:
-#                 av.pop(0)
-#                 chars.append('^')
-#                 position = positions[-1] + 1
-#                 positions.append(position)
-#             for i, j in av:
-#                 print(i, j)
-#                 if i is sre_constants.LITERAL:
-#                     byte = chr(j)
-#                     position = positions[-1] + len(byte)
-#                     chars.append(byte)
-#                     positions.append(position)
-#                     segments.append(Negated(Literal(byte, position)))
-#                 elif i is sre_constants.RANGE:
-#                     first = chr(j[0])
-#                     last = chr(j[1])
-#
-#                     start_position = positions[-1] + len(first)
-#                     chars.append(first)
-#                     positions.append(start_position)
-#
-#                     position = positions[-1] + len(first)
-#                     chars.append('-')
-#                     positions.append(position)
-#
-#                     end_position = positions[-1] + len(last)
-#                     chars.append(last)
-#                     positions.append(end_position)
-#
-#                     if negated:
-#                         segments.append(Negated(Range(first, last, (start_position, end_position))))
-#                     else:
-#                         segments.append(Range(first, last, (start_position, end_position)))
-#
-#                 else:
-#                     import pdb; pdb.set_trace()
-#             chars.append(']')
-#             position = positions[-1] + 1
-#             positions.append(position)
-#         # elif op in (sre_constants.MAX_REPEAT, sre_constants.MIN_REPEAT):
-#         #     i, j, subtree = av
-#         #     # print(subtree)
-#         #     s, suboffsets = _dump(subtree, groupdict)
-#         # elif op == sre_constants.SUBPATTERN:
-#         #     # print(op, av)
-#         #     # # groupnum, subtree = av
-#         #     groupnum, add_flags, del_flags, subtree = av
-#         #     # print(subtree)
-#         #     s, suboffsets = _dump(subtree, groupdict)
-#             # if groupnum in groupdict:
-#             #     name = groupdict[groupnum]
-#     # print(positions)
-#     # print(chars)
-#     print(segments)
-#     print("".join(chars))
-#     return treebits, chars
-#
-# # _dump(tree, groupdict)
-
-# dumpee = Reparser(tree)
-# dumpee.parse()
-
-
 def parse(pattern):
     parser = Reparser(pattern)
     results = parser.parse()
     return results, parser
 
 
-parse(pat)
+# parse(pat)
 
 
 if __name__ == "__main__":
     import unittest
     import sys
-
-    random.seed(42)
 
     class CountingTestResult(unittest.TextTestResult):
         def addSubTest(self, test, subtest, outcome):
@@ -911,60 +815,10 @@ if __name__ == "__main__":
             # add to total number of tests run
             self.testsRun += 1
 
-    class Tests(unittest.TestCase):
-        InOut = namedtuple("InOut", ("raw", "expected"))
-        parameters = (
-            # empty/blank
-            InOut(r"^$", "^$"),
-            # literal runs
-            InOut(r"^testing$", "^testing$"),
-            # multiple spaces (specifically only space!)
-            InOut(r" +", " +"),
-            # simple range; vowels
-            InOut(r'[aeiou]', '[aeiou]'),
-            # collapsing ranges
-            InOut(r'[abcdefgh]', '[aeiou]'),
-            # hex ranges
-            InOut(r"[\x20-\x7E]", " +"),
-            # unicode ranges
-            InOut(r"[\u03A0-\u03FF]", " +"),
-            # quacks like an email
-            InOut(r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$"),
-            # non-ascii alphanumeric
-            InOut(r"^[^a-zA-Z0-9]$", "^[^a-zA-Z0-9]$"),
-            # positive integers
-            InOut(r"^[1-9]+[0-9]*$", "^[1-9]+[0-9]*$"),
-            # positive decimals
-            InOut(r"(^\d*\.?\d*[0-9]+\d*$)|(^[0-9]+\d*\.\d*$)", "^[^a-zA-Z0-9]$"),
-            # positive or negative decimals with `,` as a separator
-            InOut(r"-?\d+(,\d*)?", "^[^a-zA-Z0-9]$"),
-            # ISO-2 country code(ish); 84094 or 84094-1234
-            InOut(r"[A-Z][A-Z]", "[A-Z][A-Z]"),
-            # social security; ###-##-####
-            InOut(r"[0-9]\{3\}-[0-9]\{2\}-[0-9]\{4\}", "[0-9]{3}-[0-9]{2}-[0-9]{4}"),
-            # uuid
-            InOut(
-                r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
-                "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
-            ),
-            # dates; yyyy/mm/dd
-            InOut(r'^\d{4}/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])$',
-                  ''),
-            # ipv4
-            InOut('^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$',
-                  '')
-        )
-
-        def _test_parsing(self):
-            for i, (raw, expected) in enumerate(self.parameters, start=0):
-                with self.subTest(msg=raw):
-                    # if raw == '[abcdefgh]':
-                    #     pass
-                    re.compile(raw)
-                    nodes = parse(raw)
-                    output = "".join(str(n) for n in nodes)
-                    self.assertEqual(output, expected)
-                    # self.assertSequenceEqual(output, expected)
+    class CustomAsserts:
+        def setUp(self) -> None:
+            """Always seed with the same number"""
+            return random.seed(42)
 
         def assertRawMatches(self, raw, expected):
             try:
@@ -975,44 +829,6 @@ if __name__ == "__main__":
             output = "".join(str(n) for n in nodes)
             self.assertEqual(output, expected)
 
-        def test_repeats(self):
-            raw, expected = "^a{3}$", "^a{3}$"
-            self.assertRawMatches(raw, expected)
-            raw, expected = "^a{3,}$", "^a{3,}$"
-            self.assertRawMatches(raw, expected)
-            raw, expected = "^a{3,10}$", "^a{3,10}$"
-            self.assertRawMatches(raw, expected)
-            raw, expected = "^a{0,10}$", "^a{0,10}$"
-            self.assertRawMatches(raw, expected)
-            maximum = int(sre_constants.MAXREPEAT)-1
-            raw, expected = f"^a{{0,{maximum}}}$", f"^a*$"
-            self.assertRawMatches(raw, expected)
-            raw, expected = f"^a{{1,{maximum}}}$", f"^a+$"
-            self.assertRawMatches(raw, expected)
-            raw, expected = "^[^@]$", "^[^@]$"
-            self.assertRawMatches(raw, expected)
-
-        def test_iso2_codes(self):
-            """ISO-2 country code(ish); GB, US etc"""
-            raw, expected = r"[A-Z][A-Z]", "[A-Z][A-Z]"
-            self.assertRawMatches(raw, expected)
-
-        def test_zipcodeish(self):
-            """zip code(ish?); 84094 or 84094-1234"""
-            raw, expected = r"[0-9]{5}(-[0-9]{4})?", "[0-9]{5}(-[0-9]{4})?"
-            self.assertRawMatches(raw, expected)
-
-        def test_emailish(self):
-            raw, expected = (r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$")
-            self.assertRawMatches(raw, expected)
-
-        def test_optional(self):
-            raw, expected = r"(?P<product>\w+)/(?P<project_id>\w+|)", r"(?P<product>[\w]+)/(?P<project_id>[\w]+|)"
-            self.assertRawMatches(raw, expected)
-            raw, expected = r"(?P<product>\w+)/(?:(?P<project_id>\w+))?", "(?P<product>[\w]+)/(?P<project_id>[\w]+){0,1}"
-            self.assertRawMatches(raw, expected)
-
-    class GenerationTests(unittest.TestCase):
         def assertGenerates(self, raw, expected):
             try:
                 re.compile(raw)
@@ -1022,36 +838,183 @@ if __name__ == "__main__":
             output = "".join(chain.from_iterable([n.generate() for n in nodes]))
             self.assertSequenceEqual(output, expected)
 
+    # class Te1sts(CustomAsserts, unittest.TestCase):
+    #     InOut = namedtuple("InOut", ("raw", "expected"))
+    #     parameters = (
+    #         # empty/blank
+    #         InOut(r"^$", "^$"),
+    #         # literal runs
+    #         InOut(r"^testing$", "^testing$"),
+    #         # multiple spaces (specifically only space!)
+    #         InOut(r" +", " +"),
+    #         # simple range; vowels
+    #         InOut(r"[aeiou]", "[aeiou]"),
+    #         # collapsing ranges
+    #         InOut(r"[abcdefgh]", "[aeiou]"),
+    #         # hex ranges
+    #         InOut(r"[\x20-\x7E]", " +"),
+    #         # unicode ranges
+    #         InOut(r"[\u03A0-\u03FF]", " +"),
+    #         # quacks like an email
+    #         InOut(r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$"),
+    #         # non-ascii alphanumeric
+    #         InOut(r"^[^a-zA-Z0-9]$", "^[^a-zA-Z0-9]$"),
+    #         # positive integers
+    #         InOut(r"^[1-9]+[0-9]*$", "^[1-9]+[0-9]*$"),
+    #         # positive decimals
+    #         InOut(r"(^\d*\.?\d*[0-9]+\d*$)|(^[0-9]+\d*\.\d*$)", "^[^a-zA-Z0-9]$"),
+    #         # positive or negative decimals with `,` as a separator
+    #         InOut(r"-?\d+(,\d*)?", "^[^a-zA-Z0-9]$"),
+    #         # ISO-2 country code(ish); 84094 or 84094-1234
+    #         InOut(r"[A-Z][A-Z]", "[A-Z][A-Z]"),
+    #         # social security; ###-##-####
+    #         InOut(r"[0-9]\{3\}-[0-9]\{2\}-[0-9]\{4\}", "[0-9]{3}-[0-9]{2}-[0-9]{4}"),
+    #         # uuid
+    #         InOut(
+    #             r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
+    #             "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
+    #         ),
+    #         # dates; yyyy/mm/dd
+    #         InOut(r"^\d{4}/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])$", ""),
+    #         # ipv4
+    #         InOut(
+    #             "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+    #             "",
+    #         ),
+    #     )
+    #
+    #     def _test_parsing(self):
+    #         for i, (raw, expected) in enumerate(self.parameters, start=0):
+    #             with self.subTest(msg=raw):
+    #                 # if raw == '[abcdefgh]':
+    #                 #     pass
+    #                 re.compile(raw)
+    #                 nodes = parse(raw)
+    #                 output = "".join(str(n) for n in nodes)
+    #                 self.assertEqual(output, expected)
+    #                 # self.assertSequenceEqual(output, expected)
+    #
+    #     def test_repeats(self):
+    #         raw, expected = "^a{3}$", "^a{3}$"
+    #         self.assertRawMatches(raw, expected)
+    #         raw, expected = "^a{3,}$", "^a{3,}$"
+    #         self.assertRawMatches(raw, expected)
+    #         raw, expected = "^a{3,10}$", "^a{3,10}$"
+    #         self.assertRawMatches(raw, expected)
+    #         raw, expected = "^a{0,10}$", "^a{0,10}$"
+    #         self.assertRawMatches(raw, expected)
+    #         maximum = int(sre_constants.MAXREPEAT) - 1
+    #         raw, expected = f"^a{{0,{maximum}}}$", f"^a*$"
+    #         self.assertRawMatches(raw, expected)
+    #         raw, expected = f"^a{{1,{maximum}}}$", f"^a+$"
+    #         self.assertRawMatches(raw, expected)
+    #         raw, expected = "^[^@]$", "^[^@]$"
+    #         self.assertRawMatches(raw, expected)
+    #
+    #     def test_iso2_codes(self):
+    #         """ISO-2 country code(ish); GB, US etc"""
+    #         raw, expected = r"[A-Z][A-Z]", "[A-Z][A-Z]"
+    #         self.assertRawMatches(raw, expected)
+    #
+    #     def test_zipcodeish(self):
+    #         """zip code(ish?); 84094 or 84094-1234"""
+    #         raw, expected = r"[0-9]{5}(-[0-9]{4})?", "[0-9]{5}(-[0-9]{4}){0,1}"
+    #         self.assertRawMatches(raw, expected)
+    #
+    #     def test_emailish(self):
+    #         raw, expected = (r"^[^@]+@[^@]+\.[^@]+$", "^[^@]+@[^@]+\.[^@]+$")
+    #         self.assertRawMatches(raw, expected)
+    #
+    #     # def test_language_prefixish(self):
+    #     #     raw, expected = (
+    #     #         r"[A-Za-z]{2,4}(-[A-Za-z]{4})?(-[A-Za-z]{2}|\d{3})?$",
+    #     #         r"[A-Za-z]{2,4}(-[A-Za-z]{4}){0,1}(-[A-Za-z]{2}|\d{3})?$",
+    #     #     )
+    #     #     self.assertRawMatches(raw, expected)
+    #
+    #     def test_optional(self):
+    #         raw, expected = (
+    #             r"(?P<product>\w+)/(?P<project_id>\w+|)",
+    #             r"(?P<product>\w+)/(?P<project_id>\w+|)",
+    #         )
+    #         self.assertRawMatches(raw, expected)
+    #         raw, expected = (
+    #             r"(?P<product>\w+)/(?:(?P<project_id>\w+))?",
+    #             "(?P<product>\w+)/(?P<project_id>\w+){0,1}",
+    #         )
+    #         self.assertRawMatches(raw, expected)
 
-        def test_iso2_codes(self):
-            """ISO-2 country code(ish); GB, US etc"""
-            raw = r"[A-Z][A-Z]"
-            expected = "UD"
+    class OrTests(CustomAsserts, unittest.TestCase):
+
+        def test_simple(self):
+            """This actually compiles into an IN query"""
+            raw = r"a|b"
+            expected = "a"
             self.assertGenerates(raw, expected)
 
-        def test_repeats(self):
-            raw = "^a{3}$"
-            expected = "aaa"
+        def test_simple2(self):
+            """This actually compiles into an IN query"""
+            raw = r"[1-9]|1"
+            expected = "1"
             self.assertGenerates(raw, expected)
-            raw = "^a{3,}$"
-            expected = 'aaaaa'
+
+        def test_two_branches(self):
+            raw = r"0[1-9]|1[0-2]"
+            expected = "05"
             self.assertGenerates(raw, expected)
-            raw = "^a{3,10}$"
-            expected = 'aaaa'
+
+        def test_three_branches(self):
+            raw = r'0[1-9]|[12][0-9]|3[01]'
+            expected = '30'
             self.assertGenerates(raw, expected)
-            raw = "^a{0,10}$"
-            expected = 'aaaaaaaaaa'
+
+        def test_multiple_parts_in_separate_groups(self):
+            raw = r'-[A-Za-z]{2}|\d{3}'
+            expected = '-HV'
             self.assertGenerates(raw, expected)
-            maximum = int(sre_constants.MAXREPEAT) - 1
-            raw = f"^a{{0,{maximum}}}$"
-            expected = 'aaa'
+            raw = r'(-[A-Za-z]{2}|\d{3})'
+            expected = '-CQ'
             self.assertGenerates(raw, expected)
-            raw = f"^a{{1,{maximum}}}$"
-            expected = 'aaaaaaa'
-            self.assertGenerates(raw, expected)
-            raw = f"^[^@]$"
-            expected = '\U000c1d15'
-            self.assertGenerates(raw, expected)
+
+    # class GenerationTe1sts(unittest.TestCase):
+    #     def assertGenerates(self, raw, expected):
+    #         try:
+    #             re.compile(raw)
+    #         except re.error:
+    #             self.fail(f"Invalid regex: {raw!r}")
+    #         nodes, parser = parse(raw)
+    #         output = "".join(chain.from_iterable([n.generate() for n in nodes]))
+    #         self.assertSequenceEqual(output, expected)
+    #
+    #     def test_iso2_codes(self):
+    #         """ISO-2 country code(ish); GB, US etc"""
+    #         raw = r"[A-Z][A-Z]"
+    #         expected = "AH"
+    #         self.assertGenerates(raw, expected)
+    #
+    #     def test_repeats(self):
+    #         raw = "^a{3}$"
+    #         expected = "aaa"
+    #         self.assertGenerates(raw, expected)
+    #         raw = "^a{3,}$"
+    #         expected = "aaaaaaaaa"
+    #         self.assertGenerates(raw, expected)
+    #         raw = "^a{3,10}$"
+    #         expected = "aaaaaaaaaa"
+    #         self.assertGenerates(raw, expected)
+    #         raw = "^a{0,10}$"
+    #         expected = "a"
+    #         self.assertGenerates(raw, expected)
+    #         maximum = int(sre_constants.MAXREPEAT) - 1
+    #         raw = f"^a{{0,{maximum}}}$"
+    #         expected = "a"
+    #         self.assertGenerates(raw, expected)
+    #         raw = f"^a{{1,{maximum}}}$"
+    #         expected = "aaaaaa"
+    #         self.assertGenerates(raw, expected)
+    #         raw = f"^[^@]$"
+    #         expected = "\U000961d8"
+    #         self.assertGenerates(raw, expected)
 
     unittest.main(
         module=sys.modules[__name__],
@@ -1059,7 +1022,7 @@ if __name__ == "__main__":
         verbosity=2,
         catchbreak=True,
         tb_locals=True,
-        failfast=True,
+        failfast=False,
         buffer=False,
     )
 
