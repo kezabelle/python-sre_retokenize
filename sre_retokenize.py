@@ -7,7 +7,7 @@ import sre_compile
 import string
 from collections import namedtuple
 from itertools import chain
-from typing import List, Union, Text, Type, Optional
+from typing import List, Union, Text, Type, Optional, Set, Tuple
 
 # pat = r"^o[^a-z][a-zA-Z]n[^ABC]p*p.*t[^a]i.{1,3}o[0-9]{0, 10}n.+?al/(?P<arg1>\d+)/✂️/(?:(?P<arg2>[a-b])/)?/([0-9]+?)/(?P<arg3>\\d+)/(?:(?P<arg4>[c-d])/)?$"
 #
@@ -28,9 +28,10 @@ Position = namedtuple("Position", ("start", "by", "end"))
 
 
 class Token:
-    __slots__ = ("start_position",)
+    __slots__ = ("start_position", "sre_types")
 
     position: int
+    sre_types: Set[sre_constants._NamedIntConstant]
 
     def __new__(cls, position: int):
         instance = super().__new__(cls)
@@ -74,7 +75,7 @@ class Token:
 
 
 class Literal(Token):
-    __slots__ = ("value", "sre_types", "start_position", "is_numbers", "is_ascii_letters")
+    __slots__ = ("value", "start_position", "is_numbers", "is_ascii_letters")
 
     value: str
 
@@ -129,14 +130,14 @@ class NumericLiteral(Literal):
     pass
 
 class Beginning(Token):
-    __slots__ = ("value", "sre_type", "start_position")
+    __slots__ = ("value", "start_position")
 
     value: str
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = "^"
-        instance.sre_type = sre_constants.AT_BEGINNING
+        instance.sre_types = {sre_constants.AT_BEGINNING}
         return instance
 
     def __str__(self):
@@ -153,14 +154,14 @@ class Beginning(Token):
 
 
 class End(Token):
-    __slots__ = ("value", "sre_type", "start_position")
+    __slots__ = ("value", "start_position")
 
     value: str
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = "$"
-        instance.sre_type = sre_constants.AT_END
+        instance.sre_types = {sre_constants.AT_END}
         return instance
 
     def __str__(self):
@@ -176,15 +177,21 @@ class End(Token):
         return ""
 
 
+class Boundary(End):
+    # TODO
+    def __str__(self):
+        return 'TODO BOUNDARY'
+
+
 class Anything(Token):
-    __slots__ = ("value", "sre_type", "start_position")
+    __slots__ = ("value", "start_position")
 
     value: str
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = "."
-        instance.sre_type = sre_constants.ANY
+        instance.sre_types = {sre_constants.ANY}
         return instance
 
     def __str__(self):
@@ -195,7 +202,7 @@ class Anything(Token):
 
 
 class NegatedLiteral(Literal):
-    __slots__ = ("value", "sre_type", "start_position", "is_numbers", "is_ascii_letters")
+    __slots__ = ("value", "start_position", "is_numbers", "is_ascii_letters")
 
     def __new__(cls, value: int, position: int):
         instance = super().__new__(cls, value, position)
@@ -234,6 +241,7 @@ class Range(Token):
         instance.end = end
         instance.is_numbers = start >= 49 and end <= 57
         instance.is_ascii_letters = start >= 65 and end <=122
+        instance.sre_types = {sre_constants.RANGE}
         return instance
 
     def __str__(self) -> str:
@@ -281,6 +289,45 @@ class Range(Token):
     @classmethod
     def from_chars(cls, start: str, end: str):
         return cls(start=ord(start), end=ord(end), position=0)
+
+
+class MultipleRange(Token):
+    """
+    A Multiple range is a specialisation over an `In` which only contains
+    `Range` subclasses. e.g: `In([NumericRange, AsciiAlphabetRange, ...]))
+
+    This is mostly so that I know which character classes to mark as invalid when
+    generating non-matches.
+    """
+    __slots__ = ("ranges",)
+
+    ranges: List[Range]
+    def __new__(cls, ranges: List[Range], position: int):
+        instance = super().__new__(cls, position)
+        instance.ranges = ranges
+        instance.sre_types = {sre_constants.RANGE}
+        return instance
+
+    def __str__(self) -> str:
+        bits = "".join('{0}-{1}'.format(chr(r.start), chr(r.end)) for r in self.ranges)
+        return f"[{bits}]"
+
+    def generate(self):
+        branch = random.choice(self.ranges)
+        return chr(random.randint(branch.start, branch.end))
+
+    def generate_nonmatch(self) -> str:
+        # return a chr() which is not in any of the ranges
+        ranges = {range(r.start, r.end) for r in self.ranges}
+        ignore_initially: List[str] = list(string.printable)
+        while len(ignore_initially):
+            current = random.choice(ignore_initially)
+            ignore_initially.remove(current)
+            if not any(current in r for r in ranges):
+                return current
+        # It's outside of the simple ascii printable range, so now I need to
+        # generate something harder...
+        return 'ERP'
 
 
 class NumericRange(Range):
@@ -337,6 +384,7 @@ class Repeat(Token):
         instance.min = min
         instance.max = max
         instance.value = value
+        instance.sre_types = {sre_constants.REPEAT}
         return instance
 
     def __str__(self):
@@ -430,6 +478,7 @@ class Category(Token):
     def __new__(cls, value, position):
         instance = super().__new__(cls, position)
         instance.value = value
+        instance.sre_types = {sre_constants.CATEGORY}
         return instance
 
     def __str__(self):
@@ -438,7 +487,9 @@ class Category(Token):
 
 class DigitCategory(Category):
     def __new__(cls, position):
-        return super().__new__(cls, '\d', position)
+        instance = super().__new__(cls, '\d', position)
+        instance.sre_types = {sre_constants.CATEGORY, sre_constants.CATEGORY_DIGIT}
+        return instance
 
     def __str__(self):
         return f'[0-9], from {self.value!s}'
@@ -451,9 +502,29 @@ class DigitCategory(Category):
         return str(random.choice(string.ascii_letters))
 
 
+class Negated(Token):
+    __slots__ = ('value',)
+    def __new__(cls, value: Token, position):
+        instance = super().__new__(cls, '\w', position)
+        instance.value = value
+        instance.sre_types = {sre_constants.NEGATE}
+        return instance
+
+    def __str__(self):
+        return 'NOT'
+
+    def generate(self):
+        return self.value.generate_nonmatch()
+
+    def generate_nonmatch(self):
+        return self.value.generate()
+
+
 class WordCategory(Category):
     def __new__(cls, position):
-        return super().__new__(cls, '\w', position)
+        instance = super().__new__(cls, '\w', position)
+        instance.sre_types = {sre_constants.CATEGORY, sre_constants.CATEGORY_WORD}
+        return instance
 
     def __str__(self):
         return f'[a-zA-Z], from {self.value!s}'
@@ -465,6 +536,21 @@ class WordCategory(Category):
     def generate_nonmatch(self):
         return str(random.choice(string.digits))
 
+class SpaceCategory(Category):
+    def __new__(cls, position):
+        instance = super().__new__(cls, '\s', position)
+        instance.sre_types = {sre_constants.CATEGORY, sre_constants.CATEGORY_SPACE}
+        return instance
+
+    def __str__(self):
+        return f'{self.value!s}'
+
+    def generate(self):
+        return str(random.choice(string.whitespace))
+
+    def generate_nonmatch(self):
+        return str(random.choice(string.digits + string.ascii_letters + string.punctuation))
+
 
 
 class In(Token):
@@ -475,6 +561,7 @@ class In(Token):
     def __new__(cls, value: List[Token], position):
         instance = super().__new__(cls, position)
         instance.value = value
+        instance.sre_types = {sre_constants.IN}
         return instance
 
     def __str__(self):
@@ -500,6 +587,19 @@ class In(Token):
         # return "".join(values)
 
     def generate_nonmatch(self):
+        # reject = {None}
+        # lparts = {value.generate_nonmatch().lower() for value in self.value}
+        # uparts = {value.upper() for value in lparts}
+        # aparts = list(lparts | uparts)
+
+        # # Here we need to return a thing for which none of the parts
+        # # matches...htf do I do that?
+        # while len(aparts) != (len(self.value) * 2):
+        #     value = random.choice(self.value)
+        #     current = value.generate_nonmatch()
+        #     aparts.add(current.lower())
+        #     aparts.add(current.upper())
+
         reject = {None}
         current = None
         # Handle the case where a|b might otherwise yield 'b' as a valid
@@ -509,6 +609,19 @@ class In(Token):
         while current in reject:
             value = random.choice(self.value)
             current = value.generate_nonmatch()
+        return current
+
+        return random.choice(aparts)
+
+
+
+        # Handle the case where a|b might otherwise yield 'b' as a valid
+        # non-match for 'a'
+        # if all(isinstance(x, Literal) for x in self.value):
+        #     reject.update({x.generate() for x in self.value})
+        # while current in reject:
+        #     value = random.choice(self.value)
+        #     current = value.generate_nonmatch()
         return current
 
 
@@ -542,6 +655,7 @@ class SubPattern(Token):
         instance.name = name
         instance.number = num
         instance.value = value
+        instance.sre_types = {sre_constants.SUBPATTERN}
         return instance
 
     def __str__(self):
@@ -585,6 +699,7 @@ class OrBranch(Token):
     def __new__(cls, value: List[Token], position):
         instance = super().__new__(cls, position)
         instance.value = value
+        instance.sre_types = {sre_constants.BRANCH}
         return instance
 
     def __str__(self):
@@ -607,15 +722,49 @@ class OrBranch(Token):
         return "".join(bits)
 
 
+class GrouprefExists(Token):
+    __slots__ = ('value',)
+    value: List[Token]
+
+    def __new__(cls, value: List[Token], position):
+        instance = super().__new__(cls, position)
+        instance.value = value
+        instance.sre_types = {sre_constants.GROUPREF_EXISTS}
+
+class Groupref(Token):
+    __slots__ = ('value',)
+    value: List[Token]
+
+    def __new__(cls, value: Union[str, int], position):
+        instance = super().__new__(cls, position)
+        instance.value = value
+        instance.sre_types = {sre_constants.GROUPREF}
+
+
+class LookaheadAssertion(Token):
+    __slots__ = ('value',)
+    value: List[Token]
+
+    def __new__(cls, value: List[Token], position):
+        instance = super().__new__(cls, position)
+        instance.value = value
+        instance.sre_types = {sre_constants.ASSERT}
+
+    def generate(self):
+        return "".join(v.generate() for v in self.value)
+
+    def generate_nonmatch(self):
+        return "".join(v.generate_nonmatch() for v in self.value)
+
 class Empty(Token):
-    __slots__ = ("value", "sre_type", "start_position")
+    __slots__ = ("value", "start_position")
 
     value: str
 
     def __new__(cls, position: int):
         instance = super().__new__(cls, position)
         instance.value = ""
-        instance.sre_type = None
+        instance.sre_types = {None}
         return instance
 
     def __str__(self):
@@ -864,8 +1013,30 @@ class Reparser:
             )
         elif op is sre_constants.BRANCH:
             return self._branch(op, av, handled_nodes, handled_positions, handled_reprs)
+        elif op is sre_constants.ASSERT:
+            return self._assert(op, av, handled_nodes, handled_positions, handled_reprs)
+        elif op is sre_constants.GROUPREF_EXISTS:
+            return self._groupref_exists(op, av, handled_nodes, handled_positions, handled_reprs)
+        elif op is sre_constants.GROUPREF:
+            return self._groupref(op, av, handled_nodes, handled_positions, handled_reprs)
         else:
             raise ValueError(f"unexpected {op}: {av}")
+
+    def _groupref(self, op, av, *args, **kwargs):
+        group_name = self.named_groups_by_number.get(av, av)
+        return Groupref(group_name)
+
+    def _groupref_exists(self, op, av, *args, **kwargs):
+        maybe_bool = av.pop(0)
+        # next might be group_ref and subav
+        # dunno, group_ref, subav = av
+        some_stuff = self._continue_parsing(av, *args, **kwargs)
+        return GrouprefExists(some_stuff, self.current_position.end)
+
+    def _assert(self, op, av, *args, **kwargs):
+        probably_bool_true, subav = av
+        some_stuff = self._continue_parsing(subav, *args, **kwargs)
+        return LookaheadAssertion(some_stuff, self.current_position.end)
 
     def _branch(self, op, av, *args, **kwargs):
         # dunno what the None represents
@@ -892,6 +1063,10 @@ class Reparser:
             return DigitCategory(self.current_position.end)
         elif av is sre_constants.CATEGORY_WORD:
             return WordCategory(self.current_position.end)
+        elif av is sre_constants.CATEGORY_NOT_WORD:
+            return Negated(WordCategory(self.current_position.end), self.current_position.end)
+        elif av is sre_constants.CATEGORY_SPACE:
+            return SpaceCategory(self.current_position.end)
         raise ValueError(f"unexpected {op}: {av}")
 
     def _any(self, op, av, *args, **kwargs):
@@ -922,10 +1097,9 @@ class Reparser:
         self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
     ):
         negated: bool = av[0][0] is sre_constants.NEGATE
-        cls: Union[Type[In], Type[NegatedIn]] = In
+        cls = In
         if negated:
             av = av[1:]
-            cls = NegatedIn
         # multiple_ops = len({subop for subop, subav in av}) > 1
         # if not multiple_ops:
         #
@@ -933,12 +1107,19 @@ class Reparser:
             av, handled_nodes, handled_positions, handled_reprs
         )
 
-        if all(isinstance(x, Literal) for x in some_stuff):
+        if len(some_stuff) > 1 and all(isinstance(x, Literal) for x in some_stuff):
             cls = LiteralIn
-            if negated:
-                cls = NegatedLiteralIn
 
-        return cls(some_stuff, self.current_position.end)
+        if len(some_stuff) > 1 and all(isinstance(x, Range) for x in some_stuff):
+            instance = MultipleRange(
+                some_stuff,
+                self.current_position.end
+            )
+        else:
+            instance = cls(some_stuff, self.current_position.end)
+        if negated:
+            return Negated(instance, self.current_position.end)
+        return instance
 
     def _subpattern(
         self, op, av, handled_nodes: List, handled_positions: List, handled_reprs: List
@@ -992,6 +1173,8 @@ class Reparser:
             return self._at_beginning(op, av)
         elif av is sre_constants.AT_END:
             return self._at_end(op, av)
+        elif av is sre_constants.AT_BOUNDARY:
+            return self._at_boundary(op, av)
         else:
             raise ValueError(f"unexpected {op}: {av}")
 
@@ -1018,6 +1201,9 @@ class Reparser:
             Position(advance_from, advance_by, advance_to),
             bit,
         )
+
+    def _at_boundary(self, op, av):
+        return Boundary(self.current_position.end)
 
     def _not_literal(self, op, av, *a, **kw):
         return NegatedLiteral(av, self.current_position.end)
@@ -1208,7 +1394,12 @@ if __name__ == "__main__":
             expected_fail = 'VpiRLcfo'
             self.assertGenerates(raw, expected, expected_fail)
 
-
+    class GroupRefTests(CustomAsserts, unittest.TestCase):
+        def test_groupref_exists(self):
+            raw = r'(a|b)(?(1)\1|\.)'
+            expected = ''
+            expected_fail = ''
+            self.assertGenerates(raw, expected, expected_fail)
 
     class ComplexTests(CustomAsserts, unittest.TestCase):
         def test_ipv4ish(self):
